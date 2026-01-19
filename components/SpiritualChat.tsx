@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { generateSpiritualResponse } from '../services/geminiService';
+import { generateSpiritualResponse, ChatMessage } from '../services/geminiService';
 
 interface Message {
   text: string;
@@ -10,7 +10,7 @@ interface Message {
 const SpiritualChat: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { text: "Namaste. ¿En qué puedo ayudarte hoy?", isUser: false }
+    { text: "Namaste. Estoy aquí para escucharte y acompañarte. ¿Cómo te sientes hoy?", isUser: false }
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -27,11 +27,25 @@ const SpiritualChat: React.FC = () => {
 
     const userMsg = input.trim();
     setInput("");
-    setMessages(prev => [...prev, { text: userMsg, isUser: true }]);
+
+    // Optimistic update
+    const newMessages = [...messages, { text: userMsg, isUser: true }];
+    setMessages(newMessages);
     setIsLoading(true);
 
     try {
-      const response = await generateSpiritualResponse(userMsg);
+      // Prepare history for API
+      // Filter out the last added message (userMsg) because the service adds it manually to the history construction usually, 
+      // BUT my service implementation adds the *new* message to the passed history.
+      // So I should pass the history of *previous* messages.
+      // NOTE: strict mapping of existing messages state.
+
+      const history: ChatMessage[] = messages.map(msg => ({
+        role: msg.isUser ? 'user' : 'model',
+        parts: [{ text: msg.text }]
+      }));
+
+      const response = await generateSpiritualResponse(history, userMsg);
       setMessages(prev => [...prev, { text: response || "Paz en tu camino. No pude conectar ahora.", isUser: false }]);
     } catch (error) {
       setMessages(prev => [...prev, { text: "Mi energía está fluyendo de otra forma ahora. Intenta más tarde.", isUser: false }]);
@@ -43,7 +57,7 @@ const SpiritualChat: React.FC = () => {
   return (
     <div className="fixed bottom-6 right-6 z-50">
       {/* Toggle Button */}
-      <button 
+      <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-16 h-16 rounded-full bg-mystic-600 text-white shadow-2xl flex items-center justify-center hover:scale-110 transition-transform focus:outline-none"
       >
@@ -66,11 +80,10 @@ const SpiritualChat: React.FC = () => {
           <div ref={scrollRef} className="flex-grow p-4 overflow-y-auto space-y-4 bg-mystic-50/30 dark:bg-slate-900/50">
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.isUser ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[80%] p-3 rounded-2xl text-sm shadow-sm ${
-                  m.isUser 
-                  ? 'bg-mystic-600 text-white rounded-tr-none' 
-                  : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 rounded-tl-none border border-mystic-100 dark:border-slate-600'
-                }`}>
+                <div className={`max-w-[80%] p-3 rounded-2xl text-sm shadow-sm ${m.isUser
+                    ? 'bg-mystic-600 text-white rounded-tr-none'
+                    : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 rounded-tl-none border border-mystic-100 dark:border-slate-600'
+                  }`}>
                   {m.text}
                 </div>
               </div>
@@ -85,15 +98,15 @@ const SpiritualChat: React.FC = () => {
           </div>
 
           <div className="p-4 bg-white dark:bg-slate-800 border-t border-mystic-100 dark:border-slate-700 flex gap-2">
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSend()}
               placeholder="Escribe tu mensaje..."
               className="flex-grow bg-mystic-50 dark:bg-slate-900 border-none rounded-xl focus:ring-2 focus:ring-mystic-400 text-sm px-4 dark:text-white"
             />
-            <button 
+            <button
               onClick={handleSend}
               className="p-2 bg-mystic-600 text-white rounded-xl hover:bg-mystic-700 transition-colors"
             >
